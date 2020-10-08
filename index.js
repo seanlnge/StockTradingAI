@@ -56,8 +56,13 @@ async function getData(symbol){
   let data = [];
 
   // 1 Day In the Past
+<<<<<<< HEAD
   let past = Math.floor(Date.now()/1000 - start * 1440 * 60);
   let now = Math.floor(Date.now()/1000 - end * 1440*60);
+=======
+  let past = Math.floor(Date.now()/1000 - 60 * 1440 * 60);
+  let now = Math.floor(Date.now()/1000 - 1 * 1440*60);
+>>>>>>> 67c950be2f4906e2b38f6f78c7a090bca4d861c9
 
   // Fetch Data from API
   let dayStocks, dayPrices;
@@ -110,6 +115,7 @@ async function getAllData(){
 
 let data = JSON.parse(fs.readFileSync('data.json'));
 
+<<<<<<< HEAD
 // Create Some Bots
 function createBots(botAmount){
   let bots = [];
@@ -143,6 +149,34 @@ function createBots(botAmount){
     bots.push(bot);
   }
 
+=======
+function createBots(botAmount){
+  let bots = [];
+  let botData = {
+    //bollingerRatio: 7.296309571915129,
+    //stochasticOsc: 3.091956809271737,
+    //zylmanCandlestick: -0.34585406940540075
+    bollingerRatio: 5.084389530128404,
+    stochasticOsc: 0.7216417996413134,
+    zylmanCandlestick: -0.9321962431100155
+    //bollingerRatio: 3.1489486734449765,
+    //stochasticOsc: 0.6786321750838469,
+    //zylmanCandlestick: -1.2118257793611413
+  }
+
+  if(botAmount % 2) botAmount++;
+
+  for(let i=0; i<botAmount; i++){
+    let bot = {}
+    bot.money = 1000;
+    bot.shares = 0;
+    for(let piece of [...Object.keys(botData)]){
+      bot[piece] = botData[piece] + (action === 'evolving' ? Math.random() : 0);
+    }
+    bots.push(bot);
+  }
+
+>>>>>>> 67c950be2f4906e2b38f6f78c7a090bca4d861c9
   return bots;
 }
 
@@ -256,7 +290,11 @@ function darwinianEvolution(bots, generation){
 
 // Find all generations
 function evolveAll(refreshes, generations){
+<<<<<<< HEAD
   let bots = createBots(250);
+=======
+  let bots = createBots();
+>>>>>>> 67c950be2f4906e2b38f6f78c7a090bca4d861c9
   let gen = 0;
   for(let h=1; h<=refreshes; h++){
     for(let i=1; i<=generations; i++){
@@ -269,7 +307,8 @@ function evolveAll(refreshes, generations){
 }
 
 // VERY NEEDED, EITHER: data, evolving, or testing
-const action = 'testing';
+const action = 'data';
+let symbols = ['ETSY'];
 
 // Data
 let start = 3;
@@ -294,5 +333,10 @@ let budget = 1000;
 let symbols = ['ETSY', 'AAPL', 'NVDA', 'GE', 'F', 'BBBY', 'M', 'BAC', 'BA'];
 
 if(action === 'data') getAllData();
+<<<<<<< HEAD
 if(action === 'evolving') console.log(runBots(evolveAll(20, 300)).slice(-100));
 if(action === 'testing') console.log(runBots(createBots(250)).slice(-100));
+=======
+if(action === 'evolving') evolveAll(30, 100);
+if(action === 'testing') console.log(runBots(bots));
+>>>>>>> 67c950be2f4906e2b38f6f78c7a090bca4d861c9
