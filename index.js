@@ -1,9 +1,7 @@
 const fs = require('fs');
 const fetch = require('node-fetch');
 
-let symbols = ['ETSY'];
-
- // General Functions
+// General Functions
 function average(arr){
   return arr.reduce((a, p) => a+p) / arr.length;
 }
@@ -47,8 +45,8 @@ async function getData(symbol){
   let data = [];
 
   // 1 Day In the Past
-  let past = Math.floor(Date.now()/1000 - 13 * 1440 * 60);
-  let now = Math.floor(Date.now()/1000 - 6 * 1440*60);
+  let past = Math.floor(Date.now()/1000 - 60 * 1440 * 60);
+  let now = Math.floor(Date.now()/1000 - 1 * 1440*60);
 
   // Fetch Data from API
   let stockData1, stockPrices1;
@@ -89,29 +87,33 @@ async function getAllData(){
 
 let data = JSON.parse(fs.readFileSync('data.json'));
 
-let bots = [];
-let botData = {
-  //bollingerRatio: 7.296309571915129,
-  //stochasticOsc: 3.091956809271737,
-  //zylmanCandlestick: -0.34585406940540075
-  bollingerRatio: 5.084389530128404,
-  stochasticOsc: 0.7216417996413134,
-  zylmanCandlestick: -0.9321962431100155
-  //bollingerRatio: 3.1489486734449765,
-  //stochasticOsc: 0.6786321750838469,
-  //zylmanCandlestick: -1.2118257793611413
-}
-let botAmount = 50;
-if(botAmount % 2) botAmount++;
-
-for(let i=0; i<botAmount; i++){
-  let bot = {}
-  bot.money = 1000;
-  bot.shares = 0;
-  for(let piece of [...Object.keys(botData)]){
-    bot[piece] = botData[piece] + (action === 'evolving' ? Math.random() : 0);
+function createBots(botAmount){
+  let bots = [];
+  let botData = {
+    //bollingerRatio: 7.296309571915129,
+    //stochasticOsc: 3.091956809271737,
+    //zylmanCandlestick: -0.34585406940540075
+    bollingerRatio: 5.084389530128404,
+    stochasticOsc: 0.7216417996413134,
+    zylmanCandlestick: -0.9321962431100155
+    //bollingerRatio: 3.1489486734449765,
+    //stochasticOsc: 0.6786321750838469,
+    //zylmanCandlestick: -1.2118257793611413
   }
-  bots.push(bot);
+
+  if(botAmount % 2) botAmount++;
+
+  for(let i=0; i<botAmount; i++){
+    let bot = {}
+    bot.money = 1000;
+    bot.shares = 0;
+    for(let piece of [...Object.keys(botData)]){
+      bot[piece] = botData[piece] + (action === 'evolving' ? Math.random() : 0);
+    }
+    bots.push(bot);
+  }
+
+  return bots;
 }
 
 // Determine a buy or sell
@@ -199,6 +201,7 @@ function darwinianEvolution(bots, generation){
 
 // Find all generations
 function evolveAll(refreshes, generations){
+  let bots = createBots();
   let gen = 0;
   for(let h=1; h<=refreshes; h++){
     for(let i=1; i<=generations; i++){
@@ -211,7 +214,8 @@ function evolveAll(refreshes, generations){
 }
 
 // VERY NEEDED, EITHER: data, evolving, or testing
-const action = 'testing';
+const action = 'data';
+let symbols = ['ETSY'];
 
 if(action === 'data') getAllData();
 if(action === 'evolving') evolveAll(30, 100);
