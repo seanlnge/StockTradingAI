@@ -1,0 +1,15 @@
+{
+  "name": "stock-market-ai",
+  "version": "1.0.0",
+  "description": "Version 1 of stock market ai",
+  "main": "index.js",
+  "dependencies": {
+    "node-fetch": "^2.6.1"
+  },
+  "devDependencies": {},
+  "scripts": {
+    "test": "echo \"Error: no test specified\" && exit 1"
+  },
+  "author": "Sean Lange",
+  "license": "ISC"
+}
