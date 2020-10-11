@@ -1,5 +1,5 @@
 // Imports
-import { read, readFileSync } from 'fs';
+import { readFileSync } from 'fs';
 import getData from './data.js';
 
 const budget = 1000;
@@ -7,14 +7,18 @@ const retrieveData = true;
 const symbols = ['F'];
 let data = JSON.parse(readFileSync('data.json'));
 
+const trainingStart = 28;
+const trainingEnd = 7;
+const testingStart = 7;
+const testingEnd = 1;
+
 // Main function
 async function run(){
 
   // Retrieve Data
   if(symbols.reduce((a, c) => a || !data[c], false) || retrieveData){
     console.log('Retrieving Training Data...');
-    await getData(symbols, 28, 14);
-    data = JSON.parse(readFileSync('data.json'));
+    data = await getData(symbols, trainingStart, trainingEnd);
   }
 
   // Set Main Data Points
@@ -27,7 +31,7 @@ async function run(){
     shares: 0
   }
 
-  let bestData = evolve(botData, 300, 5);
+  let bestData = evolve(botData, 500, 10);
   botData = bestData.slice(-1)[0];
   let testing = await monteCarlo(deepCopy(botData));
   runBots([botData])
@@ -152,19 +156,21 @@ async function monteCarlo(bot){
   let orig = deepCopy(bot);
 
   console.log('Retrieving Testing Data...');
-  data = await getData(symbols, 14, 1);
+  data = await getData(symbols, testingStart, testingEnd);
   console.log('Testing...');
 
   let averageMoney = 0;
   let overallPredictability = 0;
 
   for(let i=0; i<100; i++){
-    let day = Math.floor(Math.random()*(data[symbols[0]].length-390));
+    let day = Math.max(0, Math.floor(Math.random()*(data[symbols[0]].length-390)));
+
     let symbol = symbols[Math.floor(Math.random()*symbols.length)];
 
-    for(let j=day; j<day+390; j++){
+    for(let j=day; j<day+Math.min(data[symbols[0]].length, 390); j++){
       bot = score(bot, symbol, j);
     }
+
     bot.money += bot.shares * data[symbol].slice(-1)[0].price;
     bot.shares = 0;
     overallPredictability += bot.money > 1000 ? 1 : 0;
@@ -175,7 +181,7 @@ async function monteCarlo(bot){
   averageMoney /= 100;
 
   console.log('Setting Data Back...');
-  data = await getData(symbols, 21, 7);
+  data = await getData(symbols, trainingStart, trainingEnd);
   return [overallPredictability, averageMoney];
 }
 

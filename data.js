@@ -56,18 +56,18 @@ async function getData(symbol, start, end){
     currData.sma = average(lastDay);
     currData.ema = emAverage(lastDay.slice(-50));
     currData.sed = currData.sma / currData.ema;
-    currData.vrn = variance(lastDay);
+    currData.vrn = Math.sqrt(variance(lastDay));
 
     // Bands and Indicators
     currData.hbb = currData.sma + 2*currData.vrn;
     currData.lbb = currData.sma - 2*currData.vrn;
-    currData.bbr = (currData.price - currData.lbb) / (currData.price - currData.hbb);
+    currData.bbr = (currData.price - currData.lbb) / (currData.hbb - currData.lbb);
     currData.zcm = zylmanEquation(dayStocks.o[minute], dayStocks.c[minute], dayStocks.l[minute], dayStocks.h[minute]);
     
     // Advanced Data
     currData.acd = emAverage(lastDay.slice(-12)) - emAverage(lastDay.slice(-26));
-    currData.stc = stochasticOsc(dayStocks.c.slice(minute-390, minute));
-    currData.vwp = vwapCalc(dayStocks.v.slice(minute-390, minute), dayStocks.c.slice(minute-390, minute)) - currData.price;
+    currData.stc = stochasticOsc(lastDay);
+    currData.vwp = vwapCalc(dayStocks.v.slice(minute-390, minute), dayStocks.c.slice(minute-390, minute));
     currData.vol = dayStocks.v[minute];
 
     
