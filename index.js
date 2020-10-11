@@ -1,183 +1,99 @@
-const fs = require('fs');
-const fetch = require('node-fetch');
+// Imports
+import { read, readFileSync } from 'fs';
+import getData from './data.js';
 
-/********************************/
-/*    Retrieving Stock Data     */
-/********************************/
+const budget = 1000;
+const retrieveData = true;
+const symbols = ['F'];
+let data = JSON.parse(readFileSync('data.json'));
 
-const average = (arr) => arr.reduce((a, p) => a+p) / arr.length;
+// Main function
+async function run(){
+
+  // Retrieve Data
+  if(symbols.reduce((a, c) => a || !data[c], false) || retrieveData){
+    console.log('Retrieving Training Data...');
+    await getData(symbols, 28, 14);
+    data = JSON.parse(readFileSync('data.json'));
+  }
+
+  // Set Main Data Points
+  let botData = {
+    bblr: [0, 0], bstc: [0, 0], bzcm: [0, 0],
+    bacd: [0, 0], bvrn: [0, 0], bsed: [0, 0],
+    bvwp: [0, 0], sblr: [0, 0], sstc: [0, 0],
+    szcm: [0, 0], sacd: [0, 0], svrn: [0, 0],
+    ssed: [0, 0], svwp: [0, 0], money: 1000,
+    shares: 0
+  }
+
+  let bestData = evolve(botData, 300, 5);
+  botData = bestData.slice(-1)[0];
+  let testing = await monteCarlo(deepCopy(botData));
+  runBots([botData])
+
+  console.log(botData);
+  console.log('\nMoney: $' + botData.money.toFixed(2) + '    Predictability: ' + testing[0] + '% (Avg Daily Money: $' + testing[1].toFixed(2) + ')');
+}
+
 const random = () => Math.random()-0.5;
-const variance = (arr) => arr.reduce((a, p) => a + (p - average(arr)) ** 2) / arr.length;
-const vwapCalc = (data) => data.v.reduce((a, p, i) => a + p * data.c[i]) / data.v.reduce((a, p) => a + p);
 
-function emAverage(arr){
-  if(arr.length == 1) return arr[0];
-  let prev = emAverage(arr.slice(-arr.length+1));
-  let mult = 2/(arr.length+1);
-  return arr[0] * mult + prev * (1-mult);
-}
-
-// ADX
-function adxCalc(highs, lows){
-  if(highs.length == 1) return highs[0];
-
-  let pdi = Math.max(0, highs.slice(-2)[1] - highs.slice(-2)[0]);
-  let ndi = Math.max(0, lows.slice(-2)[0] - lows.slice(-2)[1]);
-  let dx = 100 * (pdi - ndi) / (pdi + ndi);
-  let adxn = adxCalc(highs.slice(-lows.length+1), lows.slice(-lows.length+1)) * (highs.length-1) + dx
-  return adxn / highs.length;
-}
-
-// Stochastic Oscillator
-function stochasticOsc(data){
-  let last14 = data.c.slice(-14);
-  let min = last14.reduce((a, c) => Math.min(a, c));
-  let max = last14.reduce((a, c) => Math.max(a, c));
-  if(max - min == 0) return 0;
-  return (data.c[data.c.length-1] - min) / (max - min);
-}
-
-// Find Momentum
-function zylmanEquation(o, c, l, h){
-  if(c-o == 0) return 0;
-  let eq = ((c-l) - (h-c)) / Math.abs(c-o);
-  if(eq > 1 || eq < -1) return 1/eq;
-  return eq;
-}
-
-async function getData(symbol){
-  let data = [];
-
-  // 1 Day In the Past
-  let past = Math.floor(Date.now()/1000 - (start+1) * 1440 * 60);
-  let now = Math.floor(Date.now()/1000 - end * 1440*60);
-
-  // Fetch Data from API
-  let dayStocks, dayPrices;
-  let url = "https://finnhub.io/api/v1/stock/candle?symbol=" + symbol + "&resolution=1&from=" + past + "&to=" + now + "&token=btu9sk748v6vqmm3erqg";
-  await fetch(url).then(res => res.json()).then(data => {
-    dayStocks = data;
-    dayPrices = data.c;
-  });
-
-  let minute = 390;
-
-  // Loop over data and create more structured info
-  while(minute < dayPrices.length){
-    let lastDay = dayPrices.slice(minute - 390, minute);
-    let currData = {};
-
-    // Basic Data
-    currData.price = dayPrices[minute];
-    currData.sma = average(lastDay);
-    currData.ema = emAverage(lastDay.slice(-50));
-    currData.vrn = variance(lastDay);
-
-    // Bands and Indicators
-    currData.hbb = currData.sma + 2*currData.vrn;
-    currData.lbb = currData.sma - 2*currData.vrn;
-    currData.bbr = (currData.price - currData.lbb) / (currData.price - currData.hbb);
-    currData.zcm = zylmanEquation(dayStocks.o[minute], dayStocks.c[minute], dayStocks.l[minute], dayStocks.h[minute]);
-    
-    // Advanced Data
-    currData.acd = emAverage(lastDay.slice(-12)) - emAverage(lastDay.slice(-26));
-    currData.adx = adxCalc(dayStocks.h.slice(-50), dayStocks.l.slice(-50));
-    currData.stc = stochasticOsc(dayStocks);
-    currData.vwp = vwapCalc(dayStocks);
-    currData.vol = dayStocks.v[minute];
-
-    data.push(currData);
-    minute++;
-  }
-  return data;
-}
-
-// Main Function to Get Data
-async function getAllData(){
-  let allData = {};
-  for(let sym of symbols){
-    allData[sym] = await getData(sym);
-  }
-  fs.writeFileSync('data.json', JSON.stringify(allData, null, 2));
-}
-
-
-
-
-/********************************/
-/*   Evolutionary Procedures    */
-/********************************/
-
-function createBots(botAmount){
+// Create a set amount of bots
+function createBots(botData, botAmount){
   if(botAmount % 2) botAmount++;
   let bots = [];
-
-  let botData = {
-    // Basics
-    money: budget, shares: 0,
-
-    // Buying Data
-    bblr: bblr, bstc: bstc, 
-    bzcm: bzcm, bacd: bacd,
-    
-    // Selling Data
-    sblr: sblr, sstc: sstc,
-    szcm: szcm, sacd: sacd,
-    
-    // Manipulating Data
-    samt: samt,
-    bamt: bamt
-  }
-
-  for(let i=0; i<botAmount; i++){ bots.push(botData) }
-
+  for(let i=0; i<botAmount; i++) bots.push(deepCopy(botData));
   return bots;
 }
 
 // Determine a buy or sell
-function getScore(values, symbol, minute){
-  let buy = sell = extra = 0;
+function score(bot, symbol, minute){
+  let buy = 0;
+  let sell = 0;
   let stock = data[symbol][minute];
 
   // Buying score
-  buy = values.bblr * stock.bbr;
-  buy += values.bstc * stock.stc;
-  buy += values.bzcm * stock.zcm;
-  buy += values.bacd * stock.acd;
+  buy = bot.bblr[0] * stock.bbr + bot.bvwp[1];
+  buy += bot.bstc[0] * stock.stc + bot.bstc[1];
+  buy += bot.bzcm[0] * stock.zcm + bot.bzcm[1];
+  buy += bot.bacd[0] * stock.acd + bot.bacd[1];
+  buy += bot.bvrn[0] * stock.vrn + bot.bvrn[1];
+  buy += bot.bsed[0] * stock.sed + bot.bsed[1];
+  buy += bot.bvwp[0] * stock.vwp + bot.bvwp[1];
 
   // Selling score
-  sell = values.sblr * stock.bbr;
-  sell += values.sstc * stock.stc;
-  sell += values.szcm * stock.zcm;
-  sell += values.sacd * stock.acd;
+  sell = bot.sblr[0] * stock.bbr + bot.sblr[1];
+  sell += bot.sstc[0] * stock.stc + bot.sstc[1];
+  sell += bot.szcm[0] * stock.zcm + bot.szcm[1];
+  sell += bot.sacd[0] * stock.acd + bot.sacd[1];
+  sell += bot.svrn[0] * stock.vrn + bot.svrn[1];
+  sell += bot.ssed[0] * stock.sed + bot.ssed[1];
+  sell += bot.svwp[0] * stock.vwp + bot.svwp[1];
 
   // Whether to buy or sell
-  if(buy > values.bamt && values.money > stock.price){
-    values.shares += Math.floor(values.money/stock.price);
-    values.money %= stock.price;
-  } else if(sell > values.samt){
-    values.money += values.shares * stock.price;
-    values.shares = 0;
+  if(buy > 0 && bot.money >= stock.price){
+    bot.shares += Math.floor(bot.money / stock.price);
+    bot.money %= stock.price;
+  } else if(sell > 0 && bot.shares > 0){
+    bot.money += stock.price * bot.shares;
+    bot.shares = 0;
   }
+
+  return bot;
 }
 
 
 // Run bots on real data
 function runBots(bots){
 
-  // Loop over all symbols and bots
-  for(let h=0; h<bots.length; h++){
-    let thisSymbol = symbols[Math.floor(Math.random()*symbols.length)]
+  // Loop over all bots
+  for(let bot of bots){
+    let symbol = symbols[Math.floor(Math.random()*symbols.length)];
 
     // Loop over minutes in day
-    for(let i=0; i<data[thisSymbol].length-390; i++){
-      getScore(bots[h], thisSymbol, i);
-    }
-
-    // Sells all data to have most money
-    bots[h].money += bots[h].shares * data[thisSymbol][data[thisSymbol].length-1].price;
-    bots[h].money = parseFloat(bots[h].money.toFixed(2));
-    bots[h].shares = 0;
+    for(let minute in data[symbol]) bot = score(bot, symbol, minute);
+    bot.money += bot.shares * data[symbol].slice(-1)[0].price;
+    bot.shares = 0;
   }
 
   // Sort bots and return
@@ -185,99 +101,96 @@ function runBots(bots){
   return returnVal;
 }
 
-// Using darwinian evolution to improve bots
-function darwinianEvolution(bots, generation){
 
-  // Loop over each bot and find money
-  bots = runBots(bots);
-
-  // Take good bots and create next generation
-  let goodBots = bots.slice(-bots.length/2);
-  let nextGen = goodBots.reduce((a, p) => {
-
-    // Edit all values by decreasing random amount
-    let newBot1 = newBot2 = JSON.parse(JSON.stringify(p));
-    let allBotValues = Object.keys(newBot1);
-    allBotValues.forEach(val => {
-      newBot1[val] += random()/generation;
-      newBot2[val] += random()/generation;
-    });
-
-    // Set money and shares back to previous values
-    newBot1.money = newBot2.money = budget;
-    newBot1.shares = newBot2.shares = 0;
-
-    a.push(newBot1, newBot2);
-    return a;
-  }, []);
-
-  return nextGen;
-}
-
-// Find all generations
-function evolve(generations, reruns){
-  let bots = createBots(50);
+// Use Darwinian Evolution to Find Best Data to Use
+function evolve(botData, generations, reruns){
+  let bots = createBots(botData, 50);
   if(!reruns) reruns = 1;
 
-  for(let h=0; h<reruns; h++){
-    for(let i=1; i<=generations; i++){
-      let amt = h*generations + i;
-      console.log("Running Generation " + amt);
-      bots = darwinianEvolution(bots, i);
+  for(let run=0; run<reruns; run++){
+    for(let generation=1; generation<=generations; generation++){
+
+      let amt = run * generations + generation;
+      if(amt % 50 == 0) console.log("Running Generation " + amt);
+
+      bots = runBots(bots);
+    
+      // Take good bots and create next generation
+      let goodBots = bots.slice(-bots.length/2);
+      bots = goodBots.reduce((a, p) => {
+    
+        // Edit all values by decreasing random amount
+        let newBot1 = deepCopy(p);
+        let newBot2 = deepCopy(p);
+
+        Object.keys(newBot1).forEach(val => {
+          if(val !== 'money' && val !== 'shares'){
+            newBot1[val][0] += random()/generation;
+            newBot1[val][1] += random()/generation;
+            newBot2[val][0] += random()/generation;
+            newBot2[val][1] += random()/generation;
+          }
+        });
+    
+        // Set money and shares back to previous values
+        newBot1.money = newBot2.money = budget;
+        newBot1.shares = newBot2.shares = 0;
+    
+        a.push(newBot1, newBot2);
+        return a;
+      }, []);
     }
   }
 
   return bots;
 }
 
+function deepCopy(obj){ return JSON.parse(JSON.stringify(obj)); }
 
+// Find Predictability
+async function monteCarlo(bot){
+  let orig = deepCopy(bot);
 
+  console.log('Retrieving Testing Data...');
+  data = await getData(symbols, 14, 1);
+  console.log('Testing...');
 
-/*********************************/
-/*    User-Generated Actions     */
-/*********************************/
+  let averageMoney = 0;
+  let overallPredictability = 0;
 
-const action = 'testing';
-let budget = 333;
-let symbols = ['BBBY'];
+  for(let i=0; i<100; i++){
+    let day = Math.floor(Math.random()*(data[symbols[0]].length-390));
+    let symbol = symbols[Math.floor(Math.random()*symbols.length)];
 
-// Days in past to get data
-let start = 1, end = 0;
+    for(let j=day; j<day+390; j++){
+      bot = score(bot, symbol, j);
+    }
+    bot.money += bot.shares * data[symbol].slice(-1)[0].price;
+    bot.shares = 0;
+    overallPredictability += bot.money > 1000 ? 1 : 0;
+    averageMoney += bot.money;
+    
+    bot = deepCopy(orig);
+  }
+  averageMoney /= 100;
 
-// Bot data
-let {bblr, bstc, bzcm, bacd, sblr, sstc, szcm, sacd, samt, bamt} = {
-  bblr: 0.5,
-  bstc: 0.5,
-  bzcm: 0.5,
-  bacd: 0.5,
-  sblr: 0.5,
-  sstc: 0.5,
-  szcm: 0.5,
-  sacd: 0.5,
-  samt: 2,
-  bamt: 2
+  console.log('Setting Data Back...');
+  data = await getData(symbols, 21, 7);
+  return [overallPredictability, averageMoney];
 }
-let data;
 
-async function runAction(action){
-  switch(action){
-    case 'data': {
-      await getAllData();
-      break;
-    }
-    case 'evolving': {
-      data = JSON.parse(fs.readFileSync('data.json'));
-      let goodBots = evolve(300, 10).slice(-100);
-      console.log(runBots(goodBots));
-      break;
-    }
-    case 'testing': {
-      data = JSON.parse(fs.readFileSync('data.json'));
-      let bestBots = runBots(createBots(1)).slice(-100);
-      console.log(bestBots);
-      break;
-    }
-    default: { console.log('bro pick an actual action'); }
+/* Reset
+{
+  {
+    bblr: [0, 0], bstc: [0, 0], bzcm: [0, 0],
+    bacd: [0, 0], bvrn: [0, 0], bsed: [0, 0],
+    bvwp: [0, 0], sblr: [0, 0], sstc: [0, 0],
+    szcm: [0, 0], sacd: [0, 0], svrn: [0, 0],
+    ssed: [0, 0], svwp: [0, 0], money: 1000,
+    shares: 0
   }
 }
-runAction(action);
+*/
+
+
+run();
