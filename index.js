@@ -10,7 +10,7 @@ let data = JSON.parse(readFileSync('data.json'));
 const trainingStart = 28;
 const trainingEnd = 7;
 const testingStart = 7;
-const testingEnd = 1;
+const testingEnd = 0;
 
 // Main function
 async function run(){
@@ -25,13 +25,17 @@ async function run(){
   let botData = {
     bblr: [0, 0], bstc: [0, 0], bzcm: [0, 0],
     bacd: [0, 0], bvrn: [0, 0], bsed: [0, 0],
-    bvwp: [0, 0], sblr: [0, 0], sstc: [0, 0],
-    szcm: [0, 0], sacd: [0, 0], svrn: [0, 0],
-    ssed: [0, 0], svwp: [0, 0], money: 1000,
+    bvwp: [0, 0], bpts: [0, 0], bpte: [0, 0],
+    bblb: [0, 0], bahb: [0, 0], brsa: [0, 0],
+    sblr: [0, 0], sstc: [0, 0], szcm: [0, 0],
+    sacd: [0, 0], svrn: [0, 0], ssed: [0, 0],
+    svwp: [0, 0], spts: [0, 0], spte: [0, 0],
+    sblb: [0, 0], sahb: [0, 0], srsa: [0, 0],
+    money: 1000,
     shares: 0
   }
 
-  let bestData = evolve(botData, 500, 10);
+  let bestData = evolve(botData, 300, 5);
   botData = bestData.slice(-1)[0];
   let testing = await monteCarlo(deepCopy(botData));
   runBots([botData])
@@ -64,6 +68,11 @@ function score(bot, symbol, minute){
   buy += bot.bvrn[0] * stock.vrn + bot.bvrn[1];
   buy += bot.bsed[0] * stock.sed + bot.bsed[1];
   buy += bot.bvwp[0] * stock.vwp + bot.bvwp[1];
+  buy += bot.bpts[0] * stock.pts + bot.bpts[1];
+  buy += bot.bpte[0] * stock.pte + bot.bpte[1];
+  buy += bot.bblb[0] * stock.blb + bot.bblb[1];
+  buy += bot.bahb[0] * stock.ahb + bot.bahb[1];
+  buy += bot.brsa[0] * stock.rsa + bot.brsa[1];
 
   // Selling score
   sell = bot.sblr[0] * stock.bbr + bot.sblr[1];
@@ -73,6 +82,11 @@ function score(bot, symbol, minute){
   sell += bot.svrn[0] * stock.vrn + bot.svrn[1];
   sell += bot.ssed[0] * stock.sed + bot.ssed[1];
   sell += bot.svwp[0] * stock.vwp + bot.svwp[1];
+  sell += bot.spts[0] * stock.pts + bot.spts[1];
+  sell += bot.spte[0] * stock.pte + bot.spte[1];
+  sell += bot.sblb[0] * stock.blb + bot.sblb[1];
+  sell += bot.sahb[0] * stock.ahb + bot.sahb[1];
+  sell += bot.srsa[0] * stock.rsa + bot.srsa[1];
 
   // Whether to buy or sell
   if(buy > 0 && bot.money >= stock.price){
@@ -162,12 +176,11 @@ async function monteCarlo(bot){
   let averageMoney = 0;
   let overallPredictability = 0;
 
-  for(let i=0; i<100; i++){
-    let day = Math.max(0, Math.floor(Math.random()*(data[symbols[0]].length-390)));
+  for(let i=0; i<testingStart-testingEnd; i++){
 
     let symbol = symbols[Math.floor(Math.random()*symbols.length)];
 
-    for(let j=day; j<day+Math.min(data[symbols[0]].length, 390); j++){
+    for(let j=i; j<i+Math.min(data[symbols[0]].length, 390); j++){
       bot = score(bot, symbol, j);
     }
 
@@ -178,7 +191,8 @@ async function monteCarlo(bot){
     
     bot = deepCopy(orig);
   }
-  averageMoney /= 100;
+  averageMoney /= testingStart-testingEnd;
+  overallPredictability /= (testingStart-testingEnd)/100;
 
   console.log('Setting Data Back...');
   data = await getData(symbols, trainingStart, trainingEnd);
@@ -190,9 +204,13 @@ async function monteCarlo(bot){
   {
     bblr: [0, 0], bstc: [0, 0], bzcm: [0, 0],
     bacd: [0, 0], bvrn: [0, 0], bsed: [0, 0],
-    bvwp: [0, 0], sblr: [0, 0], sstc: [0, 0],
-    szcm: [0, 0], sacd: [0, 0], svrn: [0, 0],
-    ssed: [0, 0], svwp: [0, 0], money: 1000,
+    bvwp: [0, 0], bpts: [0, 0], bpte: [0, 0],
+    bblb: [0, 0], bahb: [0, 0], brsa: [0, 0],
+    sblr: [0, 0], sstc: [0, 0], szcm: [0, 0],
+    sacd: [0, 0], svrn: [0, 0], ssed: [0, 0],
+    svwp: [0, 0], spts: [0, 0], spte: [0, 0],
+    sblb: [0, 0], sahb: [0, 0], srsa: [0, 0],
+    money: 1000,
     shares: 0
   }
 }

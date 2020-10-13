@@ -5,11 +5,19 @@ const average = (arr) => arr.reduce((a, p) => a+p) / arr.length;
 const variance = (arr) => arr.reduce((a, p) => a + (p - average(arr)) ** 2) / arr.length;
 const vwapCalc = (volume, close) => volume.reduce((a, p, i) => a + p * close[i]) / volume.reduce((a, p) => a + p);
 
+// Calculate Exponential Average
 function emAverage(arr){
   if(arr.length == 1) return arr[0];
   let prev = emAverage(arr.slice(-arr.length+1));
   let mult = 2/(arr.length+1);
   return arr[0] * mult + prev * (1-mult);
+}
+
+// Calculate RSA over Closing Periods
+function rsaCalc(closes){
+  let avgGains = closes.slice(1).reduce((a, p, i) => a + Math.max(0, p-closes[i-1]), 0) / closes.length;
+  let avgLoss = closes.slice(1).reduce((a, p, i) => a + Math.min(0, p-closes[i-1]), 0) / closes.length;
+  return 100 - 100 / (1 + avgGains / avgLoss);
 }
 
 // Stochastic Oscillator
@@ -49,29 +57,37 @@ async function getData(symbol, start, end){
   // Loop over data and create more structured info
   while(minute < dayPrices.length){
     let lastDay = dayPrices.slice(minute - 390, minute);
-    let currData = {};
+    let current = {};
 
     // Basic Data
-    currData.price = dayPrices[minute];
-    currData.sma = average(lastDay);
-    currData.ema = emAverage(lastDay.slice(-50));
-    currData.sed = currData.sma / currData.ema;
-    currData.vrn = Math.sqrt(variance(lastDay));
+    current.price = dayPrices[minute];
+    current.sma = average(lastDay);
+    current.ema = emAverage(lastDay.slice(-50));
+    current.sed = current.sma / current.ema;
+    current.pts = current.price / current.sma;
+    current.pte = current.price / current.ema;
+    current.vrn = Math.sqrt(variance(lastDay));
 
     // Bands and Indicators
-    currData.hbb = currData.sma + 2*currData.vrn;
-    currData.lbb = currData.sma - 2*currData.vrn;
-    currData.bbr = (currData.price - currData.lbb) / (currData.hbb - currData.lbb);
-    currData.zcm = zylmanEquation(dayStocks.o[minute], dayStocks.c[minute], dayStocks.l[minute], dayStocks.h[minute]);
+    let highBollBand = current.sma + 2*current.vrn;
+    let lowBollBand = current.sma - 2*current.vrn;
+    current.bbr = (current.price - lowBollBand) / (highBollBand - lowBollBand);
+    current.blb = (lowBollBand - current.price) > 0 ? 1 : 0;
+    current.ahb = (current.price - highBollBand) > 0 ? 1 : 0;
+    let zcm = zylmanEquation(dayStocks.o[minute], dayStocks.c[minute], dayStocks.l[minute], dayStocks.h[minute]);
+    current.zcm = zcm > 0.75 ? 1 : (zcm < -0.75 ? -1 : 0);
     
     // Advanced Data
-    currData.acd = emAverage(lastDay.slice(-12)) - emAverage(lastDay.slice(-26));
-    currData.stc = stochasticOsc(lastDay);
-    currData.vwp = vwapCalc(dayStocks.v.slice(minute-390, minute), dayStocks.c.slice(minute-390, minute));
-    currData.vol = dayStocks.v[minute];
+    let rsa = rsaCalc(lastDay.slice(-50))
+    current.rsa = rsa > 0.7 ? 1 : (rsa < 0.3 ? -1 : 0);
+    current.acd = emAverage(lastDay.slice(-24)) - emAverage(lastDay.slice(-52));
+    let stc = stochasticOsc(lastDay);
+    current.stc = stc < 0.2 ? 1 : (stc > 0.8 ? -1 : 0);
+    current.vwp = vwapCalc(dayStocks.v.slice(minute-390, minute), lastDay);
+    current.vol = dayStocks.v[minute];
 
     
-    data.push(currData);
+    data.push(current);
     minute++;
   }
   return data;
